@@ -59,7 +59,7 @@ class Proxy:
                 port.to_bytes(2, 'big')
             ])
         except Exception as e:
-            # return connection refused error
+            print("ERR sended!")
             reply = self.generate_failed_reply(address_type, 5)
 
         connection.sendall(reply)
@@ -67,6 +67,7 @@ class Proxy:
         # establish data exchange
         if reply[1] == 0 and cmd == 1:
             self.exchange_loop(connection, hijacked_conn)
+        print("We are closed!")
         hijacked_conn.sendall(b"CLOSE")
         connection.close()
 
@@ -77,14 +78,23 @@ class Proxy:
             r, w, e = select.select([client, remote], [], [])
 
             if client in r:
+                print("Waiting data from client!")
                 data = client.recv(4096)
+                print("Data recieved")
                 if remote.send(data) <= 0:
+                    print("Client break")
                     break
+                print("Sended to remote")
 
             if remote in r:
+                print("Waiting data from remote!")
                 data = remote.recv(4096)
+                print("Data recieved")
                 if client.send(data) <= 0:
+                    print("Remote break")
+
                     break
+                print("Sended to client")
 
 
     def generate_failed_reply(self, address_type, error_number):

