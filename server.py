@@ -2,8 +2,8 @@ import socket
 import select
 import struct
 
-USE_AUTH = True # only for browsers...
-resolveDNS = False
+USE_AUTH = False # only for browsers...
+resolveDNS = True
 local_port = 1080
 remote_port = 8080
 
@@ -37,21 +37,27 @@ class Proxy:
 
         if address_type == 1:
             address = socket.inet_ntoa(connection.recv(4))
+            # if address == b"WeCl":
+            #     hijacked_conn.recv(6)
+            #     address = socket.inet_ntoa(connection.recv(4))
         elif address_type == 3: # TODO forward to remote
             if resolveDNS:
                 hijacked_conn.sendall(bytes("gDOMAIN", "ascii"))
                 domain_length = connection.recv(1)[0]
                 print(f"domain len = {domain_length}")
                 hijacked_conn.sendall(struct.pack('!I',domain_length))
-                print("len sended")
                 address = connection.recv(domain_length)
-                print(address)
+                print(f"domain: {address}")
                 hijacked_conn.sendall(address)
-                #address = socket.gethostbyname(address)
-                print(f"-> {type(address)} === {address}")
-                addr_len = struct.unpack('i', hijacked_conn.recv(4))[0]
-                address = hijacked_conn.recv(addr_len).decode()
+                rec = hijacked_conn.recv(4)
+                # if rec == b"WeCl":
+                #     hijacked_conn.recv(6)
+                #     rec = hijacked_conn.recv(4)
+                addr_len = struct.unpack('i', rec)[0]
+                print("addr len", addr_len)
+                address = hijacked_conn.recv(addr_len)
                 print(f"{address}")
+                address = address.decode()
             else:
                 domain_length = connection.recv(1)[0]
                 address = connection.recv(domain_length)
@@ -97,26 +103,32 @@ class Proxy:
             r, w, e = select.select([client, remote], [], [])
 
             if client in r:
-                print("Waiting data from client!")
+                #print("Waiting data from client!")
                 data = client.recv(BUF_sz)
-                print("Data recieved")
+                #print("Data recieved")
                 if remote.send(data) <= 0:
                     print("Client break")
                     break
-                print("Sended to remote")
+                #print("Sended to remote")
 
             if remote in r:
-                print("Waiting data from remote!")
+                #print("Waiting data from remote!")
                 data = remote.recv(BUF_sz)
-                print("Data recieved")
-                if data.startswith(b"WeCloseIt"):
-                    print("Close!?")
-                    break
+                #print("Data recieved")
+                # if data.endswith(b"WeCloseIt\00"):
+                #     if data.startswith(b"WeCloseIt"):
+                #         break
+                #     data = data[:-10]
+
+                # if data.startswith(b"WeCloseIt\00") and not data.endswith(b"WeCloseIt\00"):
+                #     data = data[10:]
+
+                # if data.startswith(b"WeCloseIt"):
+                #     break
                 if client.send(data) <= 0:
                     print("Remote break")
-
                     break
-                print("Sended to client")
+                #print("Sended to client")
 
 
     def generate_failed_reply(self, address_type, error_number):
@@ -168,7 +180,10 @@ class Proxy:
         while True:
             conn, addr = s.accept()
             print("* new connection from {}".format(addr))
-            self.handle_client(conn)
+            try:
+                self.handle_client(conn)
+            except:
+                pass
 
 
 if __name__ == "__main__":

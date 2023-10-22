@@ -95,17 +95,21 @@ int main() {
                 if (FD_ISSET(remote, &read_fds)) {
                     bytes_received = recv(remote, buffer, BUFFER_SIZE, 0);
                     if (bytes_received <= 0 || strncmp(buffer, "CLOSE", 5) == 0 || send(client, buffer, bytes_received, 0) <= 0) {
+                        if(strncmp(buffer, "CLOSE", 5) == 0){
+                            printf("Close was requested!\n");
+                        }
                         break;
                     }
                 }
             }
-            printf("clinet close!\n");
-            write(remote, "WeCloseIt", 10);
+            printf("Clinet close!\n");
+            //write(remote, "WeCloseIt", 10);
             close(client);
         }else 
         if (strncmp(buffer, "gDOMAIN", 7) == 0) {
             printf("domain!\n");
             unsigned int szDomain;
+            int sz_ip;
             printf("to read\n");
             read(remote, &szDomain, sizeof(szDomain));
             szDomain = ntohl(szDomain);
@@ -116,9 +120,10 @@ int main() {
             printf("Looking up (%.*s)\n", szDomain, domain);
 
             struct hostent *host_info;
-            char ip_buffer[INET_ADDRSTRLEN];
+            char ip_buffer[INET_ADDRSTRLEN] = {0};
 
             host_info = gethostbyname(domain);
+            free(domain);
             if (host_info == NULL) {
                 printf("Failed to get host by name.\n");
                 return 1;
@@ -129,8 +134,9 @@ int main() {
             printf("IP address: %s\n", ip_buffer);
             
             // sending strlen
-            int sz_ip = strlen(ip_buffer);
-            write(remote, &sz_ip, sizeof(sz_ip));
+            sz_ip = strlen(ip_buffer);
+            printf("sz_ip = %d sz = %d\n", sz_ip, sizeof(sz_ip));
+            write(remote, &sz_ip, sizeof(sz_ip)); // &sz_ip
 
             write(remote, &ip_buffer, strlen(ip_buffer));
         }
