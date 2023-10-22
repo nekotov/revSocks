@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <netdb.h>
 
 #define BUFFER_SIZE 4096
 #define R_HOST "127.0.0.1"
@@ -44,7 +45,7 @@ int main() {
         buffer[bytes_received] = '\0';
         printf("Received: %s\n", buffer);
 
-        if (strstr(buffer, "CONNECT") != NULL) {
+        if (strncmp(buffer, "CONNECT", 7) == 0) {
             int client;
             struct sockaddr_in client_addr;
             char *token;
@@ -98,8 +99,40 @@ int main() {
                     }
                 }
             }
-
+            printf("clinet close!\n");
+            write(remote, "WeCloseIt", 10);
             close(client);
+        }else 
+        if (strncmp(buffer, "gDOMAIN", 7) == 0) {
+            printf("domain!\n");
+            unsigned int szDomain;
+            printf("to read\n");
+            read(remote, &szDomain, sizeof(szDomain));
+            szDomain = ntohl(szDomain);
+            printf("strlen = %u\n", szDomain);
+            char* domain = malloc(szDomain*sizeof(char)+1);
+            read(remote, domain, szDomain);
+            domain[szDomain+1] = 0;
+            printf("Looking up (%.*s)\n", szDomain, domain);
+
+            struct hostent *host_info;
+            char ip_buffer[INET_ADDRSTRLEN];
+
+            host_info = gethostbyname(domain);
+            if (host_info == NULL) {
+                printf("Failed to get host by name.\n");
+                return 1;
+            }
+
+            inet_ntop(AF_INET, (void *)host_info->h_addr_list[0], ip_buffer, sizeof(ip_buffer));
+
+            printf("IP address: %s\n", ip_buffer);
+            
+            // sending strlen
+            int sz_ip = strlen(ip_buffer);
+            write(remote, &sz_ip, sizeof(sz_ip));
+
+            write(remote, &ip_buffer, strlen(ip_buffer));
         }
     }
 

@@ -1,7 +1,9 @@
 import socket
 import select
+import struct
 
-USE_AUTH = False # only for browsers...
+USE_AUTH = True # only for browsers...
+resolveDNS = False
 local_port = 1080
 remote_port = 8080
 
@@ -36,9 +38,24 @@ class Proxy:
         if address_type == 1:
             address = socket.inet_ntoa(connection.recv(4))
         elif address_type == 3: # TODO forward to remote
-            domain_length = connection.recv(1)[0]
-            address = connection.recv(domain_length)
-            address = socket.gethostbyname(address)
+            if resolveDNS:
+                hijacked_conn.sendall(bytes("gDOMAIN", "ascii"))
+                domain_length = connection.recv(1)[0]
+                print(f"domain len = {domain_length}")
+                hijacked_conn.sendall(struct.pack('!I',domain_length))
+                print("len sended")
+                address = connection.recv(domain_length)
+                print(address)
+                hijacked_conn.sendall(address)
+                #address = socket.gethostbyname(address)
+                print(f"-> {type(address)} === {address}")
+                addr_len = struct.unpack('i', hijacked_conn.recv(4))[0]
+                address = hijacked_conn.recv(addr_len).decode()
+                print(f"{address}")
+            else:
+                domain_length = connection.recv(1)[0]
+                address = connection.recv(domain_length)
+                address = socket.gethostbyname(address)
 
         port = int.from_bytes(connection.recv(2), 'big', signed=False)
 
@@ -92,6 +109,9 @@ class Proxy:
                 print("Waiting data from remote!")
                 data = remote.recv(BUF_sz)
                 print("Data recieved")
+                if data.startswith(b"WeCloseIt"):
+                    print("Close!?")
+                    break
                 if client.send(data) <= 0:
                     print("Remote break")
 
