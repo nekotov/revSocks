@@ -1,9 +1,11 @@
 import socket
 import select
 
-USE_AUTH = False
+USE_AUTH = False # only for browsers...
 local_port = 1080
 remote_port = 8080
+
+BUF_sz = 2048
 
 SOCKS_VERSION = 5
 hijacked_conn = None
@@ -47,8 +49,8 @@ class Proxy:
             else:
                 connection.close()
 
-            addr = int.from_bytes(socket.inet_aton("127.0.0.1"), 'big', signed=False) # TODO:
-            port = 1234 # fix
+            addr = int.from_bytes(socket.inet_aton(address), 'big', signed=False) # TODO:
+            port = port # fix
 
             reply = b''.join([
                 SOCKS_VERSION.to_bytes(1, 'big'),
@@ -79,7 +81,7 @@ class Proxy:
 
             if client in r:
                 print("Waiting data from client!")
-                data = client.recv(4096)
+                data = client.recv(BUF_sz)
                 print("Data recieved")
                 if remote.send(data) <= 0:
                     print("Client break")
@@ -88,7 +90,7 @@ class Proxy:
 
             if remote in r:
                 print("Waiting data from remote!")
-                data = remote.recv(4096)
+                data = remote.recv(BUF_sz)
                 print("Data recieved")
                 if client.send(data) <= 0:
                     print("Remote break")

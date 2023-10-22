@@ -9,7 +9,7 @@
 #include "lwip/sys.h"
 #include <netdb.h>
 
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 2048
 #define R_HOST "192.168.43.240"
 #define R_PORT 8080
 
