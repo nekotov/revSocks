@@ -3,17 +3,50 @@
 #include "espressif/esp_common.h"
 #include "FreeRTOS.h"
 #include "task.h"
-
+#include "lwip/dns.h"
+#include "lwip/netdb.h"
 #include "lwip/sockets.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
-#include <netdb.h>
+//#include <netdb.h>
 
 #define BUFFER_SIZE 2048
 #define R_HOST "192.168.43.240"
 #define R_PORT 8080
 
 char __attribute__((aligned(4))) buffer[BUFFER_SIZE];
+
+
+
+void set_dns() {
+    ip_addr_t dns_ip;
+    // Set the IP address of the DNS server
+    IP_ADDR4(&dns_ip, 8, 8, 8, 8); // For example, Google's DNS server
+    // Set the DNS server (DNS_MAX_SERVERS = 2 by default, so 0 or 1)
+    dns_setserver(0, &dns_ip);
+}
+
+
+
+// void get_ip_from_domain(char *domain, char *ip_buffer) {
+//     struct hostent *he;
+//     struct in_addr **addr_list;
+//     int i;
+
+//     if ((he = gethostbyname(domain)) == NULL) {  
+//         // get the host info
+//         printf("gethostbyname\n");
+//         return;
+//     }
+
+//     addr_list = (struct in_addr **)he->h_addr_list;
+
+//     for(i = 0; addr_list[i] != NULL; i++) {
+//         // Return the first one;
+//         strcpy(ip_buffer , inet_ntoa(*addr_list[i]));
+//         return;
+//     }
+// }
 
 
 int create_socket(char *_server, int _port) {
@@ -85,7 +118,7 @@ void reverse_tcp_task(void *pvParameters) {
         buffer[bytes_received] = '\0';
         printf("Received: %s\n", buffer);
 
-        if (strstr(buffer, "CONNECT") != NULL) {
+        if (strncmp(buffer, "CONNECT", 7) == 0) {
             int __attribute__((aligned(4))) client;
             // struct sockaddr_in client_addr;
             char __attribute__((aligned(4))) *token;
@@ -155,7 +188,43 @@ void reverse_tcp_task(void *pvParameters) {
             }
             printf("Closing socket!\n");
             close(client);
+        }else
+        if (strncmp(buffer, "gDOMAIN", 7) == 0) {
+            printf("domain! %d\n", LWIP_DNS);
+            unsigned int szDomain;
+            int sz_ip;
+            printf("to read\n");
+            read(remote, &szDomain, sizeof(szDomain));
+            szDomain = ntohl(szDomain);
+            printf("strlen = %u\n", szDomain);
+            char* domain = malloc(szDomain*sizeof(char)+1);
+            read(remote, domain, szDomain);
+            domain[szDomain+1] = 0;
+            printf("Looking up (%.*s)\n", szDomain, domain);
+
+            struct hostent *host_info;
+            char ip_buffer[INET_ADDRSTRLEN] = {0};
+
+            host_info = gethostbyname(domain);
+
+
+            free(domain); // !!!!!!!!!!!!!!!!!!!!!!!
+            if (host_info == NULL) {
+                printf("Failed to get host by name.\n");                
+            }
+
+            inet_ntop(AF_INET, (void *)host_info->h_addr_list[0], ip_buffer, sizeof(ip_buffer));
+
+            printf("IP address: %s\n", ip_buffer);
+            
+            // sending strlen
+            sz_ip = strlen(ip_buffer);
+            printf("sz_ip = %d sz = %d\n", sz_ip, sizeof(sz_ip));
+            write(remote, &sz_ip, sizeof(sz_ip)); // &sz_ip
+
+            write(remote, &ip_buffer, strlen(ip_buffer));
         }
+        
         printf("Waiting to restart reading???\n");
         vTaskDelay(100 / portTICK_PERIOD_MS );
         
@@ -168,5 +237,6 @@ void reverse_tcp_task(void *pvParameters) {
 
 
 void start_reverse_tcp(const char * _server, int _port) {
-  xTaskCreate(reverse_tcp_task, (const char *)"reverse_tcp_task", 512, NULL, 1, NULL);
+    set_dns();
+    xTaskCreate(reverse_tcp_task, (const char *)"reverse_tcp_task", 512, NULL, 1, NULL);
 }
