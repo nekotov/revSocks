@@ -14,8 +14,7 @@
 #define R_HOST "192.168.43.240"
 #define R_PORT 8080
 
-char __attribute__((aligned(4))) buffer[BUFFER_SIZE];
-
+char __attribute__((aligned(4))) buffer[BUFFER_SIZE + 1]; // +1 for null terminator
 
 
 void set_dns() {
@@ -83,6 +82,7 @@ int create_socket(char *_server, int _port) {
     (struct sockaddr *)&serverSockAddr,
               sizeof(serverSockAddr)) < 0 ) {
     printf("conection failed\n");
+    close(sockfd); // Close the socket on failure
     return -1;
   }
   return sockfd;
@@ -115,7 +115,9 @@ void reverse_tcp_task(void *pvParameters) {
             break;
         }
 
-        buffer[bytes_received] = '\0';
+        if (bytes_received < BUFFER_SIZE) { // Ensure we don't write past the end of the array
+          buffer[bytes_received] = '\0';
+        }
         printf("Received: %s\n", buffer);
 
         if (strncmp(buffer, "CONNECT", 7) == 0) {
@@ -195,11 +197,11 @@ void reverse_tcp_task(void *pvParameters) {
             int sz_ip;
             printf("to read\n");
             read(remote, &szDomain, sizeof(szDomain));
-            szDomain = ntohl(szDomain);
+            szDomain = ntohl(szDomain)+1; // prbly I forgot +1 for \00
             printf("strlen = %u\n", szDomain);
             char* domain = malloc(szDomain*sizeof(char)+1);
             read(remote, domain, szDomain);
-            domain[szDomain+1] = 0;
+            domain[szDomain/*not +1*/] = '\0'; // Ensure null termination
             printf("Looking up (%.*s)\n", szDomain, domain);
 
             struct hostent *host_info;
@@ -224,13 +226,13 @@ void reverse_tcp_task(void *pvParameters) {
 
             write(remote, &ip_buffer, strlen(ip_buffer));
         }
-        
+        close(remote);
         printf("Waiting to restart reading???\n");
         vTaskDelay(100 / portTICK_PERIOD_MS );
         
     }
 
-    close(remote);
+    
 
     return 0;
 }
